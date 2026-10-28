@@ -522,3 +522,11 @@ func TestContextEndsTheRenderBetweenSteps(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestTIFFUnlimitedFlagIsUsedWhenLibvipsHasIt(t *testing.T) {
+	has := vips.MajorVersion > 8 || (vips.MajorVersion == 8 && vips.MinorVersion >= 17)
+	if has && !TIFFUnlimited() {
+		t.Fatalf("libvips %s has the tiffload unlimited flag but it is not in use", vips.Version)
+	}
+	t.Logf("libvips %s, tiff unlimited in use: %v", vips.Version, TIFFUnlimited())
+}
