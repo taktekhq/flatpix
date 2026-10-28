@@ -210,3 +210,16 @@ func TestReleaseIsIdempotent(t *testing.T) {
 		t.Fatalf("in use = %d", g.InUse())
 	}
 }
+
+func TestForceCountsAgainstCapacity(t *testing.T) {
+	g := New(10)
+	rel := g.Force(15) // over capacity on purpose
+	if g.InUse() != 15 {
+		t.Fatalf("in use = %d", g.InUse())
+	}
+	got := make(chan func(), 1)
+	go func() { r, _ := g.Acquire(context.Background(), 1); got <- r }()
+	waitFor(t, func() bool { return g.Waiting() == 1 })
+	rel()
+	(<-got)()
+}

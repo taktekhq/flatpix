@@ -123,3 +123,13 @@ func (g *Gate) grantLocked() {
 		close(w.ready)
 	}
 }
+
+// Force takes n units without waiting, even if that goes over capacity.
+// It is for accounting things that already exist (a rendered output file).
+// Waiters stay queued until usage drops back under capacity.
+func (g *Gate) Force(n int64) (release func()) {
+	g.mu.Lock()
+	g.used += n
+	g.mu.Unlock()
+	return g.releaser(n)
+}
