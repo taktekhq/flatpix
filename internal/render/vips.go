@@ -186,16 +186,35 @@ func (Vips) Render(ctx context.Context, j Job) (*Result, error) {
 	return encode(img, outFmt, plan, j.Dst)
 }
 
-// shrinkAbove is the downscale ratio at which the loader shrinks the original
-// before the final resize.
+// shrinkAbove is the downscale ratio at which WebP and TIFF are shrunk by the
+// loader before the final resize.
 const shrinkAbove = 3.0
 
-// load opens the source with libvips thumbnail-from-file. For a big downscale
-// the loader shrinks while decoding (JPEG DCT scaling, WebP scaling), to twice
-// the final size, so a huge original is never decoded at full size and never
-// held in memory. The final resize then happens from that 2x image (see
-// resizeTo). Otherwise the original is read at its own size. EXIF orientation
-// is applied here.
+// jpegShrink is the biggest JPEG DCT scale (1, 2, 4 or 8) that still leaves
+// the image at least as big as the target on both axes.
+func jpegShrink(ratio float64) int {
+	switch {
+	case ratio >= 8:
+		return 8
+	case ratio >= 4:
+		return 4
+	case ratio >= 2:
+		return 2
+	}
+	return 1
+}
+
+// load opens the source with libvips thumbnail-from-file. The loader shrinks
+// while it decodes, so a huge original is never decoded at full size and never
+// held in memory:
+//
+//   - JPEG: DCT scaling, by the biggest factor that keeps the image at least the
+//     size of the target. The final resize then runs from that image. A
+//     4000x3000 photo going to 800 pixels is decoded at 1000x750.
+//   - WebP and TIFF: for a downscale of 3x or more, to twice the final size.
+//   - Other formats cannot shrink while decoding and are read at their own size.
+//
+// EXIF orientation is applied here.
 func load(j Job, hdr header, plan *transform.Plan) (*vips.ImageRef, error) {
 	first := plan.Steps[0]
 	w, h := hdr.w, hdr.h
@@ -204,10 +223,18 @@ func load(j Job, hdr header, plan *transform.Plan) (*vips.ImageRef, error) {
 		if first.Angle == 90 || first.Angle == 270 {
 			rw, rh = rh, rw
 		}
-		ratio := math.Max(float64(rw)/float64(first.ResizeW), float64(rh)/float64(first.ResizeH))
-		if ratio >= shrinkAbove {
-			k := 2 / ratio
-			w, h = max(1, int(math.Round(float64(hdr.w)*k))), max(1, int(math.Round(float64(hdr.h)*k)))
+		// The smaller axis ratio keeps both axes at least target size.
+		ratio := math.Min(float64(rw)/float64(first.ResizeW), float64(rh)/float64(first.ResizeH))
+		switch j.SrcFormat {
+		case sniff.JPEG:
+			if f := jpegShrink(ratio); f > 1 {
+				w, h = max(1, hdr.w/f), max(1, hdr.h/f)
+			}
+		case sniff.WEBP, sniff.TIFF:
+			if ratio >= shrinkAbove {
+				k := 2 / ratio
+				w, h = max(1, int(math.Round(float64(hdr.w)*k))), max(1, int(math.Round(float64(hdr.h)*k)))
+			}
 		}
 	}
 	img, err := vips.LoadThumbnailFromFile(j.Src, w, h, vips.InterestingNone, vips.SizeForce, thumbParams(j.SrcFormat))
