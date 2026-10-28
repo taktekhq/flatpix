@@ -223,3 +223,25 @@ func TestForceCountsAgainstCapacity(t *testing.T) {
 	rel()
 	(<-got)()
 }
+
+func TestLeaseShrinkFreesTheDifference(t *testing.T) {
+	g := New(100)
+	l, err := g.AcquireLease(context.Background(), 80)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := make(chan func(), 1)
+	go func() { r, _ := g.Acquire(context.Background(), 50); got <- r }()
+	waitFor(t, func() bool { return g.Waiting() == 1 })
+	l.Shrink(10) // 90 units free now
+	(<-got)()
+	if g.InUse() != 10 {
+		t.Fatalf("in use = %d, want 10", g.InUse())
+	}
+	l.Shrink(50) // never grows
+	l.Release()
+	l.Release()
+	if g.InUse() != 0 {
+		t.Fatalf("in use = %d, want 0", g.InUse())
+	}
+}

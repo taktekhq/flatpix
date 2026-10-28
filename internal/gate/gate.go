@@ -133,3 +133,48 @@ func (g *Gate) Force(n int64) (release func()) {
 	g.mu.Unlock()
 	return g.releaser(n)
 }
+
+// Lease is a grant that can shrink. A download reserves the worst case up
+// front and shrinks to the real size once it knows it.
+type Lease struct {
+	g    *Gate
+	mu   sync.Mutex
+	n    int64
+	done bool
+}
+
+// AcquireLease is Acquire with a Lease instead of a release function.
+func (g *Gate) AcquireLease(ctx context.Context, n int64) (*Lease, error) {
+	rel, err := g.Acquire(ctx, n)
+	if err != nil {
+		return nil, err
+	}
+	_ = rel // the lease does its own accounting
+	return &Lease{g: g, n: n}, nil
+}
+
+// Shrink gives back everything above to units. It never grows.
+func (l *Lease) Shrink(to int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.done || to >= l.n {
+		return
+	}
+	if to < 0 {
+		to = 0
+	}
+	l.g.put(l.n - to)
+	l.n = to
+}
+
+// Release gives back whatever is left. It is safe to call more than once.
+func (l *Lease) Release() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.done {
+		return
+	}
+	l.done = true
+	l.g.put(l.n)
+	l.n = 0
+}

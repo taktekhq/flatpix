@@ -93,7 +93,7 @@ func TestSweeperRunsOnATicker(t *testing.T) {
 
 func TestReserveWaitsForBudgetAndGivesUp(t *testing.T) {
 	d, _ := Open(t.TempDir(), 100)
-	rel, err := d.Reserve(context.Background(), 80)
+	lease, err := d.Reserve(context.Background(), 80)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,12 +102,12 @@ func TestReserveWaitsForBudgetAndGivesUp(t *testing.T) {
 	if _, err := d.Reserve(ctx, 40); err == nil {
 		t.Fatal("want a timeout while the budget is used up")
 	}
-	rel()
-	rel2, err := d.Reserve(context.Background(), 40)
+	lease.Release()
+	l2, err := d.Reserve(context.Background(), 40)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rel2()
+	l2.Release()
 }
 
 func TestNewFileLivesInScratch(t *testing.T) {

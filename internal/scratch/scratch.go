@@ -61,12 +61,12 @@ func (d *Dir) NewFile(pattern string) (*os.File, error) {
 
 // Reserve waits (first come, first served) for n bytes of the budget. A
 // download calls it before writing, so a burst of large distinct originals
-// cannot fill the disk. It returns a release function.
-func (d *Dir) Reserve(ctx context.Context, n int64) (release func(), err error) {
+// cannot fill the disk. It returns a lease: shrink it to the real size when known, release it when the file is deleted.
+func (d *Dir) Reserve(ctx context.Context, n int64) (*gate.Lease, error) {
 	if n > d.budget.Capacity() {
 		n = d.budget.Capacity()
 	}
-	return d.budget.Acquire(ctx, n)
+	return d.budget.AcquireLease(ctx, n)
 }
 
 // Charge counts n bytes that already exist, such as a rendered output, without
