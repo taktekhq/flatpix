@@ -206,3 +206,13 @@ func short(key string) string {
 	}
 	return key
 }
+
+// AnyKey returns one key in the group, or "". Used by tests.
+func (g *Group[R]) AnyKey() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for k := range g.m {
+		return k
+	}
+	return ""
+}

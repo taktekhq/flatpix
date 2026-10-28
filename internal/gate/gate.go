@@ -54,17 +54,23 @@ func (g *Gate) Waiting() int {
 // nothing. A grant that arrives at the instant the context ends is handed
 // straight back.
 func (g *Gate) Acquire(ctx context.Context, n int64) (release func(), err error) {
+	release, _, err = g.AcquireWait(ctx, n)
+	return release, err
+}
+
+// AcquireWait is Acquire that also reports whether the caller had to queue.
+func (g *Gate) AcquireWait(ctx context.Context, n int64) (release func(), waited bool, err error) {
 	if n > g.cap {
-		return nil, ErrExceedsCapacity
+		return nil, false, ErrExceedsCapacity
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	g.mu.Lock()
 	if g.waiters.Len() == 0 && g.used+n <= g.cap {
 		g.used += n
 		g.mu.Unlock()
-		return g.releaser(n), nil
+		return g.releaser(n), false, nil
 	}
 	w := &waiter{n: n, ready: make(chan struct{})}
 	elem := g.waiters.PushBack(w)
@@ -74,15 +80,15 @@ func (g *Gate) Acquire(ctx context.Context, n int64) (release func(), err error)
 	case <-w.ready:
 		if err := ctx.Err(); err != nil {
 			g.put(n) // granted at the instant the context ended: hand it back
-			return nil, err
+			return nil, true, err
 		}
-		return g.releaser(n), nil
+		return g.releaser(n), true, nil
 	case <-ctx.Done():
 		g.mu.Lock()
 		if w.granted {
 			g.mu.Unlock()
 			g.put(n)
-			return nil, ctx.Err()
+			return nil, true, ctx.Err()
 		}
 		wasFront := g.waiters.Front() == elem
 		g.waiters.Remove(elem)
@@ -90,7 +96,7 @@ func (g *Gate) Acquire(ctx context.Context, n int64) (release func(), err error)
 			g.grantLocked()
 		}
 		g.mu.Unlock()
-		return nil, ctx.Err()
+		return nil, true, ctx.Err()
 	}
 }
 

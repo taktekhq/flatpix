@@ -14,6 +14,7 @@ import (
 	"github.com/taktekhq/flatpix/internal/cldurl"
 	"github.com/taktekhq/flatpix/internal/ferr"
 	"github.com/taktekhq/flatpix/internal/sniff"
+	"github.com/taktekhq/flatpix/internal/testimg"
 	"github.com/taktekhq/flatpix/internal/transform"
 )
 
@@ -28,6 +29,11 @@ func TestMain(m *testing.M) {
 	Shutdown()
 	os.Exit(code)
 }
+
+var (
+	red  = testimg.Red
+	blue = testimg.Blue
+)
 
 var testLimits = Limits{MaxInputPixels: 100_000_000, MaxOutputPixels: 25_000_000}
 
@@ -118,7 +124,7 @@ func dims(t testing.TB, path string) (int, int) {
 }
 
 func TestOutputMatchesThePlan(t *testing.T) {
-	src := encodeJPEG(t, patterned(400, 300), 90)
+	src := testimg.JPEG(t, testimg.Patterned(400, 300), 90)
 	tests := []struct {
 		params string
 		w, h   int
@@ -164,7 +170,7 @@ func TestOutputMatchesThePlan(t *testing.T) {
 }
 
 func TestFormats(t *testing.T) {
-	src := encodeJPEG(t, patterned(300, 200), 90)
+	src := testimg.JPEG(t, testimg.Patterned(300, 200), 90)
 	want := map[transform.Format]sniff.Format{
 		transform.FormatJPG: sniff.JPEG, transform.FormatPNG: sniff.PNG, transform.FormatWEBP: sniff.WEBP,
 		transform.FormatAVIF: sniff.AVIF, transform.FormatGIF: sniff.GIF,
@@ -195,9 +201,9 @@ func TestOriginalFormatIsKept(t *testing.T) {
 		data []byte
 		want sniff.Format
 	}{
-		{"jpeg", encodeJPEG(t, patterned(100, 80), 90), sniff.JPEG},
-		{"png", encodePNG(t, patterned(100, 80)), sniff.PNG},
-		{"gif", encodeGIF(t, patterned(100, 80)), sniff.GIF},
+		{"jpeg", testimg.JPEG(t, testimg.Patterned(100, 80), 90), sniff.JPEG},
+		{"png", testimg.PNG(t, testimg.Patterned(100, 80)), sniff.PNG},
+		{"gif", testimg.GIF(t, testimg.Patterned(100, 80)), sniff.GIF},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,7 +223,7 @@ func TestOriginalFormatIsKept(t *testing.T) {
 }
 
 func TestGIFUsesTheFirstFrameOnly(t *testing.T) {
-	_, dst, err := run(t, encodeGIF(t, split(60, 40, red, blue)), "", transform.FormatPNG)
+	_, dst, err := run(t, testimg.GIF(t, testimg.Split(60, 40, red, blue)), "", transform.FormatPNG)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +240,7 @@ func TestAlphaIsFlattenedForJPEG(t *testing.T) {
 			img.SetRGBA(x, y, red)
 		}
 	}
-	src := encodePNG(t, img)
+	src := testimg.PNG(t, img)
 	_, dst := mustRun(t, src, "", transform.FormatJPG)
 	if p := pixel(t, dst, 2, 2); !(near(p[0], 255) && near(p[1], 255) && near(p[2], 255)) {
 		t.Errorf("corner = %v, want white", p)
@@ -251,7 +257,7 @@ func TestAlphaIsFlattenedForJPEG(t *testing.T) {
 }
 
 func TestPadBackground(t *testing.T) {
-	src := encodePNG(t, solid(200, 100, blue))
+	src := testimg.PNG(t, testimg.Solid(200, 100, blue))
 	_, dst := mustRun(t, src, "c_pad,w_100,h_100,b_rgb:ff0000", transform.FormatPNG)
 	if p := pixel(t, dst, 50, 5); !isRed(p) {
 		t.Errorf("padding = %v, want red", p)
@@ -272,7 +278,7 @@ func TestPadBackground(t *testing.T) {
 }
 
 func TestGravityPicksTheWindow(t *testing.T) {
-	src := encodePNG(t, split(400, 200, red, blue))
+	src := testimg.PNG(t, testimg.Split(400, 200, red, blue))
 	_, dst := mustRun(t, src, "c_fill,w_100,h_100,g_west", transform.FormatPNG)
 	if p := pixel(t, dst, 50, 50); !isRed(p) {
 		t.Errorf("g_west centre = %v, want red", p)
@@ -288,7 +294,7 @@ func TestGravityPicksTheWindow(t *testing.T) {
 }
 
 func TestRotationIsClockwise(t *testing.T) {
-	src := encodePNG(t, split(200, 100, red, blue)) // red left, blue right
+	src := testimg.PNG(t, testimg.Split(200, 100, red, blue)) // red left, blue right
 	_, dst := mustRun(t, src, "a_90", transform.FormatPNG)
 	if w, h := dims(t, dst); w != 100 || h != 200 {
 		t.Fatalf("got %dx%d", w, h)
@@ -306,7 +312,7 @@ func TestRotationIsClockwise(t *testing.T) {
 }
 
 func TestGrayscale(t *testing.T) {
-	_, dst := mustRun(t, encodePNG(t, split(40, 40, red, blue)), "e_grayscale", transform.FormatPNG)
+	_, dst := mustRun(t, testimg.PNG(t, testimg.Split(40, 40, red, blue)), "e_grayscale", transform.FormatPNG)
 	for _, x := range []int{5, 35} {
 		p := pixel(t, dst, x, 20)
 		if p[0]-p[1] > 3 || p[1]-p[0] > 3 || p[1]-p[2] > 3 || p[2]-p[1] > 3 {
@@ -320,7 +326,7 @@ func TestGrayscale(t *testing.T) {
 }
 
 func TestEXIFOrientationIsApplied(t *testing.T) {
-	jpg := withOrientation(t, encodeJPEG(t, patterned(100, 50), 90), 6) // needs a 90 degree turn
+	jpg := testimg.WithOrientation(t, testimg.JPEG(t, testimg.Patterned(100, 50), 90), 6) // needs a 90 degree turn
 	_, dst := mustRun(t, jpg, "", transform.FormatPNG)
 	if w, h := dims(t, dst); w != 50 || h != 100 {
 		t.Errorf("no resize: got %dx%d, want 50x100", w, h)
@@ -338,8 +344,8 @@ func TestEXIFOrientationIsApplied(t *testing.T) {
 
 func TestHugeHeadersAreRefusedBeforeDecoding(t *testing.T) {
 	for name, data := range map[string][]byte{
-		"png":  hugePNGHeader(60000, 60000),
-		"jpeg": hugeJPEGHeader(t, 60000, 60000),
+		"png":  testimg.HugePNGHeader(60000, 60000),
+		"jpeg": testimg.HugeJPEGHeader(t, 60000, 60000),
 	} {
 		t.Run(name, func(t *testing.T) {
 			start := time.Now()
@@ -355,11 +361,11 @@ func TestHugeHeadersAreRefusedBeforeDecoding(t *testing.T) {
 }
 
 func TestBrokenFilesAreBadInput(t *testing.T) {
-	good := encodeJPEG(t, patterned(200, 200), 90)
+	good := testimg.JPEG(t, testimg.Patterned(200, 200), 90)
 	for name, data := range map[string][]byte{
 		"magic only":       {0xFF, 0xD8, 0xFF, 0xE0, 0, 0},
 		"truncated header": good[:20],
-		"png header only":  encodePNG(t, patterned(10, 10))[:30],
+		"png header only":  testimg.PNG(t, testimg.Patterned(10, 10))[:30],
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, _, err := run(t, data, "w_50", transform.FormatJPG)
@@ -372,7 +378,7 @@ func TestBrokenFilesAreBadInput(t *testing.T) {
 
 func TestOddBoxes(t *testing.T) {
 	for _, d := range [][2]int{{1, 1}, {1, 500}, {500, 1}, {3, 7}, {2, 2}} {
-		src := encodePNG(t, patterned(d[0], d[1]))
+		src := testimg.PNG(t, testimg.Patterned(d[0], d[1]))
 		for _, p := range []string{"w_100", "h_100", "c_fill,w_50,h_50", "c_pad,w_50,h_50", "c_fit,w_30,h_30", "c_crop,w_2,h_2", "c_lfill,w_5,h_5", "a_90", "w_1"} {
 			res, dst, err := run(t, src, p, transform.FormatPNG)
 			if err != nil {
@@ -389,9 +395,9 @@ func TestOddBoxes(t *testing.T) {
 func TestMislabeledExtensionsDoNotMatter(t *testing.T) {
 	// A PNG named .jpg, a JPEG named .png, a WebP-free GIF named .webp.
 	for name, data := range map[string][]byte{
-		"a.jpg":  encodePNG(t, patterned(64, 64)),
-		"b.png":  encodeJPEG(t, patterned(64, 64), 80),
-		"c.webp": encodeGIF(t, patterned(64, 64)),
+		"a.jpg":  testimg.PNG(t, testimg.Patterned(64, 64)),
+		"b.png":  testimg.JPEG(t, testimg.Patterned(64, 64), 80),
+		"c.webp": testimg.GIF(t, testimg.Patterned(64, 64)),
 	} {
 		src := write(t, name, data)
 		dst := filepath.Join(t.TempDir(), "out")
@@ -404,7 +410,7 @@ func TestMislabeledExtensionsDoNotMatter(t *testing.T) {
 }
 
 func TestQuality(t *testing.T) {
-	src := encodeJPEG(t, patterned(600, 400), 95)
+	src := testimg.JPEG(t, testimg.Patterned(600, 400), 95)
 	lo, _ := mustRun(t, src, "q_20", transform.FormatJPG)
 	hi, _ := mustRun(t, src, "q_95", transform.FormatJPG)
 	if lo.Size >= hi.Size {
@@ -418,7 +424,7 @@ func TestQuality(t *testing.T) {
 }
 
 func TestTIFFSourceRenders(t *testing.T) {
-	ref, err := vips.NewImageFromBuffer(encodePNG(t, patterned(80, 60)))
+	ref, err := vips.NewImageFromBuffer(testimg.PNG(t, testimg.Patterned(80, 60)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +444,7 @@ func TestTIFFSourceRenders(t *testing.T) {
 
 func TestDispatcherRefusesPrintFilesForNow(t *testing.T) {
 	d := &Dispatcher{Web: Vips{}}
-	for name, data := range map[string][]byte{"pdf": pdfBytes, "ps": psBytes, "eps": epsBytes, "eps-dos": epsDOS, "psd": psdBytes} {
+	for name, data := range map[string][]byte{"pdf": testimg.PDF, "ps": testimg.PS, "eps": testimg.EPS, "eps-dos": testimg.EPSDOS, "psd": testimg.PSD} {
 		src := write(t, "design.jpg", data) // mislabeled on purpose
 		_, err := d.Render(context.Background(), Job{Src: src, SrcFormat: sniff.Sniff(data), Spec: spec(t, "w_100"),
 			Dst: filepath.Join(t.TempDir(), "o"), Limits: testLimits})
@@ -458,7 +464,7 @@ func TestChildProcessGivesTheSameOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	src := encodeJPEG(t, patterned(500, 400), 90)
+	src := testimg.JPEG(t, testimg.Patterned(500, 400), 90)
 	path := write(t, "photo.jpg", src)
 	job := func(dst string) Job {
 		return Job{Src: path, SrcFormat: sniff.JPEG, Spec: spec(t, "c_fill,w_120,h_90,g_auto"), OutFormat: transform.FormatWEBP,
@@ -486,7 +492,7 @@ func TestChildProcessGivesTheSameOutput(t *testing.T) {
 
 func TestChildProcessReportsErrorKinds(t *testing.T) {
 	exe, _ := os.Executable()
-	data := hugePNGHeader(60000, 60000)
+	data := testimg.HugePNGHeader(60000, 60000)
 	_, err := Child{Exe: exe}.Render(context.Background(), Job{Src: write(t, "x.png", data), SrcFormat: sniff.PNG,
 		Spec: spec(t, "w_10"), OutFormat: transform.FormatJPG, Dst: filepath.Join(t.TempDir(), "o"), Limits: testLimits})
 	if !errors.Is(err, ferr.ErrTooLarge) {
@@ -499,7 +505,7 @@ func TestChildProcessIsKilledOnTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
 	defer cancel()
 	time.Sleep(5 * time.Millisecond)
-	_, err := Child{Exe: exe}.Render(ctx, Job{Src: write(t, "x.jpg", encodeJPEG(t, patterned(10, 10), 80)), SrcFormat: sniff.JPEG,
+	_, err := Child{Exe: exe}.Render(ctx, Job{Src: write(t, "x.jpg", testimg.JPEG(t, testimg.Patterned(10, 10), 80)), SrcFormat: sniff.JPEG,
 		Spec: spec(t, ""), OutFormat: transform.FormatJPG, Dst: filepath.Join(t.TempDir(), "o"), Limits: testLimits})
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want the deadline", err)
@@ -509,7 +515,7 @@ func TestChildProcessIsKilledOnTimeout(t *testing.T) {
 func TestContextEndsTheRenderBetweenSteps(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	data := encodeJPEG(t, patterned(50, 50), 80)
+	data := testimg.JPEG(t, testimg.Patterned(50, 50), 80)
 	_, err := Vips{}.Render(ctx, Job{Src: write(t, "x.jpg", data), SrcFormat: sniff.JPEG, Spec: spec(t, "w_10"),
 		OutFormat: transform.FormatJPG, Dst: filepath.Join(t.TempDir(), "o"), Limits: testLimits})
 	if !errors.Is(err, context.Canceled) {
