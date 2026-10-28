@@ -205,19 +205,10 @@ func (s *Server) image(w *statusWriter, r *http.Request, info *reqInfo) {
 	}
 
 	// Output format: f_ wins; otherwise the URL extension; f_auto negotiates.
-	want := spec.Format
-	if want == transform.FormatOriginal {
-		switch req.Ext {
-		case "jpg", "jpeg":
-			want = transform.FormatJPG
-		case "png", "webp", "avif", "gif":
-			want = transform.Format(req.Ext)
-		}
-	}
-	if want == transform.FormatAuto {
+	if spec.Format == transform.FormatAuto {
 		w.Header().Add("Vary", "Accept")
 	}
-	out := transform.ResolveFormat(want, r.Header.Get("Accept"))
+	out := transform.FormatFor(spec.Format, req.Ext, r.Header.Get("Accept"))
 	info.format = string(out)
 	fmtToken := string(out)
 	if fmtToken == "" {

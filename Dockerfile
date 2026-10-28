@@ -7,6 +7,10 @@ FROM ${GO_IMAGE} AS dev
 RUN apt-get update \
  && apt-get install -y --no-install-recommends libvips-dev pkg-config gcc \
  && rm -rf /var/lib/apt/lists/*
+# AVIF needs an encoder plugin, HEIC a decoder plugin; Debian ships them apart.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libheif-plugin-aomenc libheif-plugin-dav1d libheif-plugin-libde265 \
+ && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 
 # ---- build: compile the server ----
@@ -23,7 +27,7 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 # ---- runtime: Debian slim with the libvips runtime, non-root ----
 FROM ${RUNTIME_IMAGE} AS runtime
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libvips42t64 ca-certificates tzdata \
+ && apt-get install -y --no-install-recommends libvips42t64 libheif-plugin-aomenc libheif-plugin-dav1d libheif-plugin-libde265 ca-certificates tzdata \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin flatpix \
  && mkdir -p /data /cache /tmp/flatpix \

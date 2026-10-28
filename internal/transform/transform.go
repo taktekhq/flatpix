@@ -384,6 +384,21 @@ func (d Dim) norm() string {
 	return strconv.Itoa(int(d.V))
 }
 
+// FormatFor is the output format for a request: f_ wins, then the URL
+// extension (jpg, png, webp, avif, gif), then the source format (""). f_auto
+// is settled from the Accept header.
+func FormatFor(f Format, urlExt, accept string) Format {
+	if f == FormatOriginal {
+		switch urlExt {
+		case "jpg", "jpeg":
+			f = FormatJPG
+		case "png", "webp", "avif", "gif":
+			f = Format(urlExt)
+		}
+	}
+	return ResolveFormat(f, accept)
+}
+
 // ResolveFormat turns f_auto into a concrete format using the Accept header:
 // avif, then webp, then the original (""). Wildcards never count as support
 // for a modern format. Other formats are returned unchanged.
