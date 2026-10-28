@@ -416,7 +416,7 @@ func encode(img *vips.ImageRef, f transform.Format, plan *transform.Plan, dst st
 		data, _, err = img.ExportAvif(p)
 	case transform.FormatGIF:
 		p := vips.NewGifExportParams()
-		p.StripMetadata = true
+		p.StripMetadata, p.Effort = true, 4
 		data, _, err = img.ExportGIF(p)
 	default:
 		return nil, ferr.New(ferr.ErrInternal, "no encoder for %q", f)

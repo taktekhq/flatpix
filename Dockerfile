@@ -64,7 +64,8 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* /tmp/vips-runtime-pkgs.txt \
  && useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin flatpix \
  && mkdir -p /data /cache /tmp/flatpix \
- && chown flatpix /cache /tmp/flatpix
+ && chown flatpix /cache /tmp/flatpix \
+ && chmod 1777 /cache /tmp/flatpix   # any --user may write to them
 COPY --from=dev /usr/local/lib/libvips.so* /usr/local/lib/
 RUN ldconfig
 COPY --from=build /out/flatpix /usr/local/bin/flatpix

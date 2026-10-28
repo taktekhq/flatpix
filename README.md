@@ -36,10 +36,14 @@ part of the cache key, and you can map different names to different origins.
 Add a derived cache so renders survive a restart:
 
 ```sh
-docker run --rm -p 8080:8080 \
+mkdir -p cache
+docker run --rm -p 8080:8080 --user "$(id -u)" \
   -v "$PWD/images:/data:ro" -v "$PWD/cache:/cache" \
   -e FLATPIX_CACHE=/cache ghcr.io/taktekhq/flatpix
 ```
+
+The image runs as a non-root user. `--user` makes the container write to your
+cache folder as you.
 
 Check that it is alive: `curl localhost:8080/healthz`. Look at the counters:
 `curl localhost:8080/metrics`.
@@ -218,12 +222,13 @@ In plain words. The long version is in [docs/DESIGN.md](docs/DESIGN.md).
   is taken, with its own limits, so a slow download never blocks a render.
 - **Engine.** libvips, through [govips](https://github.com/davidbyttow/govips).
   libvips is the fast, low-memory choice for this job: it streams, it shrinks
-  on load, and it is built for many requests at once. govips is the most used
-  and best maintained Go binding. It exposes thumbnail loading, streaming input,
-  and the resize kernels. The other well-known binding, bimg, covers less of
-  libvips and has fewer releases. The image builds libvips 8.18 from source with
-  only the formats Flatpix needs, so ImageMagick, PDF and SVG loaders are not in
-  the process.
+  on load, and it is built for many requests at once. govips is an actively
+  released Go binding (v2.20.0 came out in October 2026). It gives us thumbnail
+  loading from a file, streaming input and a choice of resize kernel. The other
+  common binding, bimg, works from in-memory buffers, which does not fit
+  "never hold the original in memory". The image builds libvips 8.18 from source
+  with only the formats Flatpix needs, so ImageMagick, PDF and SVG loaders are not
+  in the process.
 - **Print files.** PDF, AI, EPS, PS and PSD are planned for v0.2. They will
   render in a child process killed as a group on timeout. The seam is in the code
   today.
@@ -242,11 +247,99 @@ scripts/docker-go.sh run ./cmd/flatpix-oracle            # needs Docker and inte
 scripts/docker-go.sh run ./cmd/flatpix-oracle -markdown  # as a table
 ```
 
-@@ORACLE@@
+Result against Cloudinary's `demo` cloud, original `sample.jpg` (864 x 576),
+libvips 8.18.7, 31 transformations. All 31 output sizes match Cloudinary's exactly.
+
+| transformation | Cloudinary | Flatpix | score | |
+|---|---|---|---|---|
+| `w_400` | 400x267 | 400x267 | 0.9906 | ok |
+| `w_150` | 150x100 | 150x100 | 0.9818 | below target |
+| `h_300` | 450x300 | 450x300 | 0.9915 | ok |
+| `w_300,h_300` | 300x300 | 300x300 | 0.9900 | ok |
+| `w_0.5` | 432x288 | 432x288 | 0.9895 | ok |
+| `dpr_2.0,w_200` | 400x267 | 400x267 | 0.9906 | ok |
+| `c_fit,w_300,h_300` | 300x200 | 300x200 | 0.9887 | ok |
+| `c_limit,w_3000,h_3000` | 864x576 | 864x576 | 0.9957 | ok |
+| `c_mfit,w_3000,h_3000` | 3000x2000 | 3000x2000 | 0.9938 | ok |
+| `c_fill,w_300,h_300` | 300x300 | 300x300 | 0.9939 | ok |
+| `c_fill,w_300,h_300,g_north` | 300x300 | 300x300 | 0.9862 | below target |
+| `c_fill,w_300,h_300,g_south_east` | 300x300 | 300x300 | 0.9939 | ok |
+| `c_fill,w_300,h_300,g_auto` | 300x300 | 300x300 | 0.7042 | below target |
+| `c_lfill,w_3000,h_300` | 864x300 | 864x300 | 0.9900 | ok |
+| `c_thumb,w_200,h_200` | 200x200 | 200x200 | 0.9915 | ok |
+| `c_pad,w_400,h_400,b_white` | 400x400 | 400x400 | 0.9935 | ok |
+| `c_pad,w_400,h_400,b_rgb:3355aa` | 400x400 | 400x400 | 0.9876 | below target |
+| `c_lpad,w_3000,h_3000,b_black` | 3000x3000 | 3000x3000 | 0.9995 | ok |
+| `c_crop,w_400,h_300` | 400x300 | 400x300 | 0.9928 | ok |
+| `c_crop,w_400,h_300,g_east` | 400x300 | 400x300 | 0.9905 | ok |
+| `c_fill,w_301,h_300` | 301x300 | 301x300 | 0.9832 | below target |
+| `c_crop,w_401,h_300` | 401x300 | 401x300 | 0.9887 | ok |
+| `ar_16:9,c_fill,w_600` | 600x338 | 600x338 | 0.9810 | below target |
+| `e_grayscale,w_400` | 400x267 | 400x267 | 0.9936 | ok |
+| `a_90,w_300` | 300x450 | 300x450 | 0.9916 | ok |
+| `w_400/a_270` | 267x400 | 267x400 | 0.9855 | below target |
+| `c_fill,w_300,h_300/c_scale,w_150` | 150x150 | 150x150 | 0.9789 | below target |
+| `f_png,w_300` | 300x200 | 300x200 | 0.9966 | ok |
+| `f_webp,w_300` | 300x200 | 300x200 | 0.9875 | below target |
+| `q_30,w_400` | 400x267 | 400x267 | 0.9771 | below target |
+| `q_auto,w_400` | 400x267 | 400x267 | 0.9828 | below target |
+
+**31 compared, min 0.7042, median 0.9900, mean 0.9801, 20 at or above 0.988** The median is above the 0.988 target.
+
+Reading the table:
+
+- Scores under the target are mostly JPEG and WebP noise. Both servers compress
+  with their own settings, and a re-encode of the same pixels already scores about
+  0.995. The low `q_` rows are the clearest case.
+- `g_auto` scores 0.70. Cloudinary picks the crop with its own model. Flatpix
+  asks libvips for attention. They choose different windows of the picture.
+- `c_fill,w_300,h_300,g_north` scores lower than the same crop from the centre.
+  The two crops have the same window on this landscape picture, so the cause is
+  in how Cloudinary renders them. We did not find it.
+- A chain resamples twice, so a chain loses a little to the order of operations.
+- Sizes always match. If a size ever does not, the table says `(resized)`.
+
+The score has limits. It is a pixel average, so it does not see a missing
+effect or a different crop if the picture is mostly flat. Use it to catch
+regressions and to choose between two ways of doing something, not as proof of
+a match.
 
 ## Benchmarks
 
-@@BENCH@@
+Test: one 4000 x 3000 JPEG (4.3 MB, made by `flatpix-bench -gen`), asked for as
+`c_fill,w_800,h_600,f_webp`, with `FLATPIX_SEATS=4`, no derived cache. Each
+request changes `q_`, so every request is a real render and nothing is shared.
+The image runs in Docker. The client is `flatpix-bench`.
+
+```sh
+go run ./cmd/flatpix-bench -gen images/photo.jpg
+docker run -d --name fp -p 8080:8080 -e FLATPIX_SEATS=4 -v "$PWD/images:/data:ro" ghcr.io/taktekhq/flatpix
+go run ./cmd/flatpix-bench -url http://localhost:8080 -n 800 -c 16
+docker exec fp grep VmHWM /proc/1/status      # peak memory
+```
+
+Measured on a 12-thread Linux machine with 31 GB of RAM. **The machine was busy
+with other jobs: its load average was 35 to 60 during the runs.** Treat the
+speed numbers as a floor. A quiet machine will do better.
+
+| Clients | Renders per second | p50 | p95 | p99 | Peak memory |
+| --- | --- | --- | --- | --- | --- |
+| 4 (every request gets a seat) | 6.8 | 559 ms | 975 ms | 1150 ms | 150 MB |
+| 16 (12 of them wait for a seat) | 8.2 | 1802 ms | 3106 ms | 3406 ms | 151 MB |
+
+With 16 clients the latency includes the wait in the queue. All 1200 requests
+returned 200. The CPU cost of one render was 0.27 CPU-seconds, read from the
+container's cgroup. Most of that is the WebP encoder. The same render to JPEG
+costs about half.
+
+Served from the derived cache (a tmpfs, 16 clients, one URL, 4000 requests):
+**6,466 requests per second**, p50 2 ms, p95 6 ms, one render in total.
+
+The image is 192 MB.
+
+What made the render cheap: a JPEG is decoded at a quarter of its size
+(1000 x 750 here) because the decoder can scale while it works. In our tests,
+decoding at half size (2000 x 1500) cost twice the CPU of decoding at a quarter.
 
 ## Limitations
 
