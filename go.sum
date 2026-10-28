@@ -1,0 +1,4 @@
+github.com/davidbyttow/govips/v2 v2.20.0 h1:sftLOcLeI+sMPVrBiw/ulWHuMm0kKyTQ2hfnoIYSxwc=
+github.com/davidbyttow/govips/v2 v2.20.0/go.mod h1:QK5liLrx7YaHC7xPcYnm4KaQIYvu9xSGrBt9goXrfgo=
+golang.org/x/sync v0.24.0 h1:iqiDrGoDgyuvAKrhLQthUEzU/R378N78gXbBjxed7oA=
+golang.org/x/sync v0.24.0/go.mod h1:sUUOizhqBxiL6pEWpqNLUiaJn1ShEbZ6BBqskPbjZm0=

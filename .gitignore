@@ -1,0 +1,8 @@
+/flatpix
+/flatpix-oracle
+/flatpix-bench
+/bin/
+*.test
+*.out
+/tmp/
+/testdata/generated/
