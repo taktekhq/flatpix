@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package cache stores rendered outputs so each one is rendered once and
 // served from storage after that. There are two stores: a directory and an
 // S3-compatible bucket. Entries are never expired by Flatpix; keys already

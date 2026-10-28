@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package origin finds and reads the original images behind /image/upload/
 // URLs. Two kinds exist in v0.1: a local directory and an S3-compatible
 // bucket.

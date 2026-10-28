@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package s3test is a tiny in-memory S3 server for tests: path-style GET,
 // HEAD and PUT of single objects, enough for the S3 origin and the S3 cache.
 package s3test

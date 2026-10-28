@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package config reads Flatpix settings from environment variables and flags.
 // A flag overrides its environment variable.
 package config

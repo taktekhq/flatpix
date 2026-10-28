@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Command flatpix-oracle checks Flatpix against Cloudinary. For each
 // transformation it fetches the original and Cloudinary's rendering from a
 // public Cloudinary cloud, renders the same URL with Flatpix and prints how

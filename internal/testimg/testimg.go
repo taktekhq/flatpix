@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package testimg generates synthetic images for tests: Patterned photos,
 // Split colours, EXIF orientation, headers that claim absurd sizes, and the
 // magic bytes of print files. No real photo or customer file is used.

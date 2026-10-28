@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package scratch owns the one directory where Flatpix puts every temporary
 // file: downloaded originals, rendered outputs and the spool files of child
 // tools such as Ghostscript and ImageMagick.

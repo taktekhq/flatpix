@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package sniff identifies a file by its magic bytes. The extension is only
 // a hint and never overrides what the bytes say.
 package sniff

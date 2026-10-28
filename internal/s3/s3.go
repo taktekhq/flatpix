@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package s3 builds the S3 client shared by the S3 origin and the S3 derived
 // cache. It speaks plain S3, so AWS S3, Cloudflare R2, MinIO and Google Cloud
 // Storage (interoperability mode) all work.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Command flatpix-bench measures a running Flatpix server.
 //
 // Make a test photo (a synthetic 4000x3000 JPEG with real detail):

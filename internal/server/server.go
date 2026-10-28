@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package server is the HTTP side of Flatpix: it parses a Cloudinary-style
 // URL, finds the original, renders (or serves the stored render) and answers.
 package server

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 package origin
 
 // Router maps a cloud name from the URL to an origin. A name that is not

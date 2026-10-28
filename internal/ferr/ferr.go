@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package ferr holds the error kinds Flatpix uses. Every error that can reach
 // an HTTP client is one of these kinds, so the server maps it to a status code
 // and a log event in one place.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package gate is a first come, first served weighted gate. Flatpix uses it
 // for render seats (weight 1), download slots (weight 1) and the scratch disk
 // budget (weight in bytes).

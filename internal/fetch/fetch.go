@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package fetch downloads remote originals for /image/fetch/ URLs, safely.
 //
 // Rules: https only, hosts (or host/path-prefix) from an allowlist, no IP

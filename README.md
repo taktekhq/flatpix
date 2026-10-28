@@ -135,8 +135,11 @@ An origin is where the originals live. Set `FLATPIX_ORIGIN` to:
 - a folder: `/data` or `dir:/data`
 - a bucket: `s3://bucket` or `s3://bucket/prefix`
 
-Buckets work with any S3-compatible service: AWS S3, Cloudflare R2, MinIO,
-Google Cloud Storage (interoperability mode with HMAC keys).
+Buckets work with S3-compatible services: AWS S3, Cloudflare R2, MinIO, Google
+Cloud Storage (interoperability mode with HMAC keys). Flatpix talks to them with
+the [minio-go](https://github.com/minio/minio-go) client. The test suite runs the
+S3 origin and the S3 cache against an in-memory S3 server. We have not yet run
+them against AWS, R2, MinIO or GCS ourselves, so tell us what you find.
 
 ```sh
 docker run --rm -p 8080:8080 \
@@ -357,6 +360,7 @@ decoding at half size (2000 x 1500) cost twice the CPU of decoding at a quarter.
 - If a decode fails, the Go binding reads the file into memory once to try again.
   That is bounded by `FLATPIX_MAX_FILE_MB`.
 - The Docker image is for linux/amd64.
+- The S3 origin and cache have only been tested against an in-memory S3 server.
 - `/metrics` has no authentication.
 
 ## Roadmap
@@ -377,6 +381,12 @@ Issues and pull requests are welcome. Run the tests in Docker, which has libvips
 scripts/docker-go.sh vet ./...
 scripts/docker-go.sh test -race ./...
 ```
+
+To build the image yourself: `docker build -t flatpix .`. It compiles libvips 8.18
+first, which takes a few minutes the first time. To build the binary without
+Docker you need Go and the libvips 8.14+ development files (`pkg-config vips`
+must work). TIFF input uses the `unlimited` loader flag when libvips has it
+(8.17 and later).
 
 Packages that do not touch libvips (`cldurl`, `transform`, `gate`, `group`,
 `fetch`, `origin`, `cache`, `config`) also test on the host with plain `go test`.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package transform turns the parameters of a Cloudinary-style URL into a
 // Spec, a normal form for cache keys, and (given the source size) a Plan of
 // exact pixel operations. Nothing here touches libvips, so it is testable

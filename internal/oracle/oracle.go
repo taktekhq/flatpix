@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package oracle compares Flatpix with Cloudinary on the same transformation.
 // Cloudinary is the oracle: for each transformation it fetches the original
 // and Cloudinary's rendering from a public cloud at run time, renders the same

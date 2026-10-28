@@ -1,0 +1,8 @@
+Flatpix
+Copyright (C) 2026 Taktek and Nizar Mahmoud
+
+Flatpix is free software, licensed under the GNU Affero General Public License,
+version 3 (AGPL-3.0). See the LICENSE file.
+
+Flatpix links libvips (LGPL-2.1-or-later) and uses the Go libraries listed in
+go.mod under their own licenses.

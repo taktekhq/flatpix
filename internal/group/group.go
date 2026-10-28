@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (C) 2026 Taktek and Nizar Mahmoud
+
 // Package group collapses concurrent requests for the same output into one
 // render, like singleflight, with reference counting.
 //
