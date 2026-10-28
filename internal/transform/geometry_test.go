@@ -74,11 +74,18 @@ func TestOutputSizes(t *testing.T) {
 		{"ar_2:1,c_fill", 4000, 3000, 4000, 2000},
 		{"ar_1:2,c_fill", 4000, 3000, 1500, 3000},
 		{"ar_16:9,c_fill,w_800,h_800", 4000, 3000, 800, 800}, // both given: ar ignored
-		// rotation swaps the final size
-		{"w_800,a_90", 4000, 3000, 600, 800},
+		// rotation comes first, so the width applies to the turned image
+		{"a_90", 4000, 3000, 3000, 4000},
+		{"w_800,a_90", 4000, 3000, 800, 1067},
 		{"w_800,a_180", 4000, 3000, 800, 600},
-		{"w_800,a_270", 4000, 3000, 600, 800},
+		{"w_800,a_270", 4000, 3000, 800, 1067},
 		{"w_800,a_auto", 4000, 3000, 800, 600},
+		{"c_fill,w_300,h_200,a_90", 4000, 3000, 300, 200},
+		{"c_crop,w_100,h_500,a_90", 4000, 3000, 100, 500},
+		// sizes from the Cloudinary sample (864x576), checked against the oracle
+		{"c_pad,w_400,h_400", 864, 576, 400, 400},
+		{"c_fill,w_301,h_300", 864, 576, 301, 300},
+		{"c_crop,w_401,h_300", 864, 576, 401, 300},
 		// chains work on the previous output
 		{"c_fill,w_800,h_800/c_scale,w_400", 4000, 3000, 400, 400},
 		{"c_fit,w_1000,h_1000/c_pad,w_1200,h_1200", 4000, 3000, 1200, 1200},
@@ -166,6 +173,31 @@ func TestPadGeometry(t *testing.T) {
 	g = plan(t, "c_lpad,w_5000,h_5000", 4000, 3000).Steps[0]
 	if g.ResizeW != 0 || g.PadX != 500 || g.PadY != 1000 { // not resized: it already fits
 		t.Errorf("lpad = %+v", g)
+	}
+}
+
+// Cloudinary rounds a half pixel up when it pads or crops from the centre, and
+// down when it fills. The oracle found both on its sample image.
+func TestCentringRoundsLikeCloudinary(t *testing.T) {
+	pad := plan(t, "c_pad,w_400,h_400", 864, 576).Steps[0] // 400x267 inside 400x400: 133 spare
+	if pad.PadY != 67 {
+		t.Errorf("pad y = %d, want 67", pad.PadY)
+	}
+	fill := plan(t, "c_fill,w_301,h_300", 864, 576).Steps[0] // 450x300 cover, 149 spare
+	if fill.ResizeW != 450 || fill.CropX != 74 {
+		t.Errorf("fill resize %d crop x %d, want 450 and 74", fill.ResizeW, fill.CropX)
+	}
+	crop := plan(t, "c_crop,w_401,h_300", 864, 576).Steps[0] // 463 spare
+	if crop.CropX != 232 || crop.CropY != 138 {
+		t.Errorf("crop at %d,%d, want 232,138", crop.CropX, crop.CropY)
+	}
+}
+
+func TestRotationComesFirst(t *testing.T) {
+	st := plan(t, "w_300,a_90", 576, 864).Steps[0]
+	// 576x864 turned is 864x576; width 300 gives 300x200.
+	if st.ResizeW != 300 || st.ResizeH != 200 || st.OutW != 300 || st.OutH != 200 || st.InW != 576 {
+		t.Errorf("step = %+v", st)
 	}
 }
 

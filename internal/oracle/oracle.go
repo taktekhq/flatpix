@@ -27,6 +27,7 @@ import (
 // Cases are the transformations compared by default.
 var Cases = []string{
 	"w_400",
+	"w_150",
 	"h_300",
 	"w_300,h_300",
 	"w_0.5",
@@ -45,6 +46,8 @@ var Cases = []string{
 	"c_lpad,w_3000,h_3000,b_black",
 	"c_crop,w_400,h_300",
 	"c_crop,w_400,h_300,g_east",
+	"c_fill,w_301,h_300",
+	"c_crop,w_401,h_300",
 	"ar_16:9,c_fill,w_600",
 	"e_grayscale,w_400",
 	"a_90,w_300",

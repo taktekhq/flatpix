@@ -8,11 +8,11 @@ import (
 )
 
 // StepPlan is one step with every size worked out. The engine runs, in order:
-// resize to ResizeW x ResizeH (if set), crop CropW x CropH at CropX,CropY or
-// by Interest (if set), pad onto a CanvasW x CanvasH canvas at PadX,PadY
-// (if set), grayscale, rotate by Angle.
+// rotate by Angle, resize to ResizeW x ResizeH (if set), crop CropW x CropH at
+// CropX,CropY or by Interest (if set), pad onto a CanvasW x CanvasH canvas at
+// PadX,PadY (if set), grayscale. Every size is in the space after the rotation.
 type StepPlan struct {
-	InW, InH         int
+	InW, InH         int // size entering the step, before its rotation
 	ResizeW, ResizeH int
 	CropX, CropY     int
 	CropW, CropH     int
@@ -22,7 +22,7 @@ type StepPlan struct {
 	Bg               *Color
 	Gray             bool
 	Angle            int
-	OutW, OutH       int // size after this step, rotation included
+	OutW, OutH       int // size after this step
 }
 
 // Plan is a Spec applied to a source of a known size.
@@ -166,15 +166,27 @@ func fitSize(sw, sh, tw, th int, limit, up bool) (int, int) {
 	return at1(w), at1(h)
 }
 
-func (st Step) plan(sw, sh int, maxPx int64) (*StepPlan, error) {
-	sp := &StepPlan{InW: sw, InH: sh, Bg: st.Bg, Gray: st.Gray, Angle: st.Angle}
+func (st Step) plan(inW, inH int, maxPx int64) (*StepPlan, error) {
+	sp := &StepPlan{InW: inW, InH: inH, Bg: st.Bg, Gray: st.Gray, Angle: st.Angle}
+	sw, sh := inW, inH // the source as the resize sees it: rotation comes first
+	if st.Angle == 90 || st.Angle == 270 {
+		sw, sh = sh, sw
+	}
 	tw, th, explicit := st.target(sw, sh)
-	w, h := sw, sh // size before pad and rotation
+	w, h := sw, sh // the size so far, in the rotated space
 
 	setResize := func(rw, rh int) {
 		if rw != sw || rh != sh {
 			sp.ResizeW, sp.ResizeH = rw, rh
 		}
+	}
+	// Centering: Cloudinary rounds a half pixel up for pad and crop, and down
+	// for fill (the oracle shows both). Compass directions need no rounding.
+	half := func(avail int) int {
+		if st.Crop == "pad" || st.Crop == "lpad" || st.Crop == "crop" {
+			return (avail + 1) / 2
+		}
+		return avail / 2
 	}
 	gx := func(avail int) int { // horizontal offset inside avail spare pixels
 		switch st.Gravity {
@@ -183,7 +195,7 @@ func (st Step) plan(sw, sh int, maxPx int64) (*StepPlan, error) {
 		case "east", "north_east", "south_east":
 			return avail
 		}
-		return avail / 2
+		return half(avail)
 	}
 	gy := func(avail int) int {
 		switch st.Gravity {
@@ -192,7 +204,7 @@ func (st Step) plan(sw, sh int, maxPx int64) (*StepPlan, error) {
 		case "south", "south_west", "south_east":
 			return avail
 		}
-		return avail / 2
+		return half(avail)
 	}
 	crop := func(cw, ch, rw, rh int) { // crop cw x ch out of an rw x rh image
 		sp.CropW, sp.CropH = cw, ch
@@ -278,9 +290,6 @@ func (st Step) plan(sw, sh int, maxPx int64) (*StepPlan, error) {
 	if int64(w)*int64(h) > maxPx {
 		return nil, ferr.New(ferr.ErrBadInput,
 			"the requested output of %dx%d is %d pixels, over the limit of %d", w, h, int64(w)*int64(h), maxPx)
-	}
-	if st.Angle == 90 || st.Angle == 270 {
-		w, h = h, w
 	}
 	sp.OutW, sp.OutH = w, h
 	return sp, nil

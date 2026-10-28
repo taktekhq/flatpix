@@ -3,6 +3,7 @@ package render
 import (
 	"bytes"
 	"context"
+	"math"
 	"os"
 
 	"github.com/davidbyttow/govips/v2/vips"
@@ -167,7 +168,7 @@ func (Vips) Render(ctx context.Context, j Job) (*Result, error) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		next, err := applyStep(img, sp, i == 0, outFmt, j.Limits.MaxOutputPixels)
+		next, err := applyStep(img, sp, outFmt, j.Limits.MaxOutputPixels)
 		img = next
 		if err != nil {
 			if ferr.Kind(err) != ferr.ErrInternal {
@@ -185,28 +186,51 @@ func (Vips) Render(ctx context.Context, j Job) (*Result, error) {
 	return encode(img, outFmt, plan, j.Dst)
 }
 
-// load opens the source with libvips thumbnail-from-file: the loader shrinks
-// while decoding (JPEG DCT scaling, WebP and TIFF pyramids), so a huge original
-// is never decoded at full size and never held in memory. Without a resize the
-// target is the native size, which makes it a plain streamed load. EXIF
-// orientation is applied here.
+// shrinkAbove is the downscale ratio at which the loader shrinks the original
+// before the final resize.
+const shrinkAbove = 3.0
+
+// load opens the source with libvips thumbnail-from-file. For a big downscale
+// the loader shrinks while decoding (JPEG DCT scaling, WebP scaling), to twice
+// the final size, so a huge original is never decoded at full size and never
+// held in memory. The final resize then happens from that 2x image (see
+// resizeTo). Otherwise the original is read at its own size. EXIF orientation
+// is applied here.
 func load(j Job, hdr header, plan *transform.Plan) (*vips.ImageRef, error) {
 	first := plan.Steps[0]
 	w, h := hdr.w, hdr.h
-	crop, size := vips.InterestingNone, vips.SizeForce
 	if first.ResizeW > 0 {
-		w, h = first.ResizeW, first.ResizeH
-		if first.Interest != "" && first.CropW > 0 {
-			// Resize and content-aware crop in one libvips call.
-			w, h = first.CropW, first.CropH
-			crop, size = interest(first.Interest), vips.SizeBoth
+		rw, rh := hdr.w, hdr.h // the source as the resize will see it
+		if first.Angle == 90 || first.Angle == 270 {
+			rw, rh = rh, rw
+		}
+		ratio := math.Max(float64(rw)/float64(first.ResizeW), float64(rh)/float64(first.ResizeH))
+		if ratio >= shrinkAbove {
+			k := 2 / ratio
+			w, h = max(1, int(math.Round(float64(hdr.w)*k))), max(1, int(math.Round(float64(hdr.h)*k)))
 		}
 	}
-	img, err := vips.LoadThumbnailFromFile(j.Src, w, h, crop, size, thumbParams(j.SrcFormat))
+	img, err := vips.LoadThumbnailFromFile(j.Src, w, h, vips.InterestingNone, vips.SizeForce, thumbParams(j.SrcFormat))
 	if err != nil {
 		return nil, ferr.Wrap(ferr.ErrBadInput, err, "the original could not be decoded")
 	}
 	return img, nil
+}
+
+// resizeTo scales to exactly tw x th. Mitchell is softer than libvips'
+// default Lanczos3 and agrees better with Cloudinary's output (see the oracle).
+func resizeTo(img *vips.ImageRef, tw, th int) error {
+	w, h := img.Width(), img.Height()
+	if w == tw && h == th {
+		return nil
+	}
+	if err := img.ResizeWithVScale(float64(tw)/float64(w), float64(th)/float64(h), vips.KernelMitchell); err != nil {
+		return err
+	}
+	if img.Width() != tw || img.Height() != th { // rounding guard
+		return img.ThumbnailWithSize(tw, th, vips.InterestingNone, vips.SizeForce)
+	}
+	return nil
 }
 
 // materialize copies an image into memory. Content-aware cropping reads the
@@ -227,26 +251,29 @@ func materialize(img *vips.ImageRef, maxPixels int64) (*vips.ImageRef, error) {
 	return out, nil
 }
 
-func applyStep(img *vips.ImageRef, sp transform.StepPlan, loaded bool, outFmt transform.Format, maxPx int64) (*vips.ImageRef, error) {
-	if sp.ResizeW > 0 && !loaded {
-		var err error
-		if sp.Interest != "" && sp.CropW > 0 {
-			err = img.ThumbnailWithSize(sp.CropW, sp.CropH, interest(sp.Interest), vips.SizeBoth)
-		} else {
-			err = img.ThumbnailWithSize(sp.ResizeW, sp.ResizeH, vips.InterestingNone, vips.SizeForce)
-		}
-		if err != nil {
+// applyStep runs one step: rotate, resize, crop, pad, grayscale. Rotation
+// comes first, as in Cloudinary, so a_90,w_300 gives a 300 pixel wide result.
+// The image may be replaced (a content-aware crop copies it into memory).
+func applyStep(img *vips.ImageRef, sp transform.StepPlan, outFmt transform.Format, maxPx int64) (*vips.ImageRef, error) {
+	var err error
+	switch sp.Angle {
+	case 90:
+		err = img.Rotate(vips.Angle90)
+	case 180:
+		err = img.Rotate(vips.Angle180)
+	case 270:
+		err = img.Rotate(vips.Angle270)
+	}
+	if err != nil {
+		return img, err
+	}
+	if sp.ResizeW > 0 {
+		if err := resizeTo(img, sp.ResizeW, sp.ResizeH); err != nil {
 			return img, err
 		}
 	}
-	if sp.CropW > 0 && !(sp.Interest != "" && sp.ResizeW > 0) {
-		cw, ch := sp.CropW, sp.CropH
-		if cw > img.Width() {
-			cw = img.Width()
-		}
-		if ch > img.Height() {
-			ch = img.Height()
-		}
+	if sp.CropW > 0 {
+		cw, ch := min(sp.CropW, img.Width()), min(sp.CropH, img.Height())
 		if sp.Interest != "" {
 			m, err := materialize(img, maxPx)
 			if err != nil {
@@ -257,13 +284,8 @@ func applyStep(img *vips.ImageRef, sp transform.StepPlan, loaded bool, outFmt tr
 				return img, err
 			}
 		} else {
-			x, y := sp.CropX, sp.CropY
-			if x+cw > img.Width() {
-				x = img.Width() - cw
-			}
-			if y+ch > img.Height() {
-				y = img.Height() - ch
-			}
+			x := min(sp.CropX, img.Width()-cw)
+			y := min(sp.CropY, img.Height()-ch)
 			if err := img.ExtractArea(x, y, cw, ch); err != nil {
 				return img, err
 			}
@@ -287,20 +309,30 @@ func applyStep(img *vips.ImageRef, sp transform.StepPlan, loaded bool, outFmt tr
 		}
 	}
 	if sp.Gray {
-		if err := img.ToColorSpace(vips.InterpretationBW); err != nil {
-			return img, err
-		}
-	}
-	var err error
-	switch sp.Angle {
-	case 90:
-		err = img.Rotate(vips.Angle90)
-	case 180:
-		err = img.Rotate(vips.Angle180)
-	case 270:
-		err = img.Rotate(vips.Angle270)
+		err = grayscale(img)
 	}
 	return img, err
+}
+
+// grayscale weights the gamma-encoded channels with the Rec. 709 luma
+// coefficients. libvips' own black-and-white conversion works in linear light
+// and comes out noticeably brighter than Cloudinary's.
+func grayscale(img *vips.ImageRef) error {
+	n := img.Bands()
+	if n < 3 {
+		return nil // already grey
+	}
+	const r, g, b = 0.2126, 0.7152, 0.0722
+	m := make([][]float64, n)
+	for i := range m {
+		m[i] = make([]float64, n)
+		if i < 3 {
+			m[i][0], m[i][1], m[i][2] = r, g, b
+		} else {
+			m[i][i] = 1 // alpha passes through
+		}
+	}
+	return img.Recomb(m)
 }
 
 // finish brings the image to sRGB and flattens transparency for formats that

@@ -456,7 +456,7 @@ func (q Quality) WebP() int {
 	if q.Num > 0 || q.Auto != "" {
 		return q.JPEG()
 	}
-	return 85
+	return 75 // about what Cloudinary's default WebP weighs on the oracle sample
 }
 
 // AVIF is the AVIF quality for q. AVIF reaches the same look at a lower number.
