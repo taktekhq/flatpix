@@ -396,7 +396,7 @@ oracle and say what happened to the scores.
 
 ## About
 
-Built by Nizar Mahmoud, the engineer who moved Sticker Mule off Cloudinary.
+Built by Nizar Mahmoud, who helped a client drop a $40k Cloudinary contract.
 
 Flatpix is made by [Taktek](https://github.com/taktekhq).
 
